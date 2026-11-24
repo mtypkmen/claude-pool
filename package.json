@@ -1,0 +1,13 @@
+{
+  "name": "claude-pool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local proxy and web panel that lets one Claude Code session use several Claude accounts at once.",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "setup": "node setup.js",
+    "start": "node server.js",
+    "import": "node import.js",
+    "test": "node test/warm-test.js server.js && node test/memory-test.js server.js && node test/correction-test.js server.js agent.md && node test/knowledge-test.js ."
+  }
+}
