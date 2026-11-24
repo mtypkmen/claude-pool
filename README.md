@@ -15,7 +15,7 @@ Nothing leaves your machine except the requests Claude Code was going to send an
 
 ## Features
 
-- **Several accounts, one session.** Requests are spread by remaining quota instead of exhausting one account first.
+- **Up to 10 accounts, one session.** Requests are spread by remaining quota instead of exhausting one account first. Each account gets its own color in the panel.
 - **Sticky balancing.** Anthropic's prompt cache is per account, so switching on every request would waste it. The proxy stays on the current account until another one is more than 3 points emptier.
 - **Real failover only.** A response counts as an account limit only if it carries `retry-after` or a non-`allowed` limit status. Other 429s are passed through untouched.
 - **Limit check on start.** The first real request triggers a tiny `hi` to every account so the panel shows each account's limits immediately.
@@ -60,7 +60,7 @@ $env:CLAUDE_CONFIG_DIR = "$HOME\.claude-pool\account2"; claude auth login
 cp accounts.example.json accounts.json
 ```
 
-Edit `accounts.json`: one entry per account, `creds` is the `.credentials.json` inside that account's config folder (`~` is expanded):
+Edit `accounts.json`: one entry per account (up to 10, extra entries are ignored), `creds` is the `.credentials.json` inside that account's config folder (`~` is expanded):
 
 ```json
 [

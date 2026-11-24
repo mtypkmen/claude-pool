@@ -4,6 +4,7 @@ const CLIENT_ID = '9d1c250a-e61b-47e8-bb04-3be3bc1f2a99';
 const STATS = __dirname + '/stats.json';
 let saved = {}; try { saved = JSON.parse(fs.readFileSync(STATS)); } catch {}
 const accts = JSON.parse(fs.readFileSync(__dirname + '/accounts.json'))
+  .slice(0, 10)
   .map(a => ({ ...a, creds: a.creds.replace(/^~/, require('os').homedir()), reqs: 0, limited: 0, last: 0, until: 0, off: false, status: '-', rl: {}, inTok: 0, outTok: 0, cacheTok: 0, ...saved[a.name] }));
 let saveT;
 const save = () => { clearTimeout(saveT); saveT = setTimeout(() => fs.writeFile(STATS, JSON.stringify(Object.fromEntries(accts.map(a => [a.name, { reqs: a.reqs, limited: a.limited, inTok: a.inTok, outTok: a.outTok, cacheTok: a.cacheTok }]))), () => {}), 2000); };

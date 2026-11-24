@@ -11,6 +11,12 @@ const PAL = [
   { body: '#dd7b59', ring: '#ffb08a', glow: '#ff8a5c', css: ['#ff5a3c', '#ffb36b'] },
   { body: '#2fcf8a', ring: '#9af0c8', glow: '#46e0a0', css: ['#17b17a', '#7be8b8'] },
   { body: '#a77bff', ring: '#d0b8ff', glow: '#b08cff', css: ['#8a5cff', '#d0b8ff'] },
+  { body: '#ff5fa8', ring: '#ffb3d6', glow: '#ff7fbc', css: ['#e83d8e', '#ffb3d6'] },
+  { body: '#f2b632', ring: '#ffe08a', glow: '#ffcc55', css: ['#e5a100', '#ffe08a'] },
+  { body: '#22c7e8', ring: '#9be9f7', glow: '#4fd8f2', css: ['#0fb0d3', '#9be9f7'] },
+  { body: '#ef4444', ring: '#ffa8a8', glow: '#ff6b6b', css: ['#d92d2d', '#ffa8a8'] },
+  { body: '#8fd62b', ring: '#d3f59a', glow: '#a9e65a', css: ['#74b81a', '#d3f59a'] },
+  { body: '#7a8ba8', ring: '#c2cde0', glow: '#9aabc6', css: ['#5f7191', '#c2cde0'] },
 ];
 
 let lenis = null;
