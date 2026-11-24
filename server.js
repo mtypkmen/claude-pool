@@ -61,6 +61,7 @@ const askOf = j => {
   }
   return '';
 };
+const isNewPrompt = j => !!askOf({ messages: (j.messages || []).slice(-1) });
 
 const AGENT = __dirname + '/agent.md';
 const rules = () => {
@@ -69,6 +70,26 @@ const rules = () => {
   return { use: use.replace(/^# .*\n/, '').trim(), write: sec.writing || '', fix: sec.fixing || '' };
 };
 
+const CORR = /\b(no|not|wrong|incorrect|doesn'?t|didn'?t|isn'?t|still|instead|actually|undo|revert|redo|again|broken|fix|mistake|bug)\b|yanl[ıi]ş|olmad[ıi]|olmuyor|hay[ıi]r|hata|düzelt|bozuk|yine|tekrar|değil|istemedim/i;
+let prev = null;
+async function revise(j) {
+  const a = pick(new Set()), p = prev; prev = null;
+  if (!a || !p) return;
+  const r = rules(), list = mem.notes.slice(-30);
+  try {
+    const res = await api(a, { model: WARM_MODEL, max_tokens: 300, system: [{ type: 'text', text: CC }], messages: [{ role: 'user', content:
+      `${r.use}\n\n${r.fix}\n\nPrevious request: ${p.ask.slice(0, 500)}\nPrevious result: ${p.said.slice(0, 1200)}\nUser's new message: ${askOf(j).slice(0, 600)}\n\nCurrent notes:\n${list.map((n, i) => `${i}. ${n.text}`).join('\n')}\n\nDoes the new message say the previous result was wrong, did not work, or must be redone? Reply with JSON only: {"correction":true|false,"bad":[numbers of notes that are wrong or misleading],"lesson":"one corrected lesson, or empty string"}` }] });
+    const m = ((await res.json()).content?.[0]?.text || '').match(/\{[\s\S]*\}/);
+    if (!m) return;
+    const d = JSON.parse(m[0]);
+    if (!d.correction) return;
+    const drop = new Set((d.bad || []).filter(i => Number.isInteger(i) && list[i]).map(i => list[i].t));
+    mem.notes = mem.notes.filter(n => !drop.has(n.t));
+    const t = String(d.lesson || '').trim();
+    if (t && t.length <= 300 && !mem.notes.some(n => n.text === t)) mem.notes.push({ t: Date.now(), acct: a.name, text: t, fixed: true });
+    saveMem();
+  } catch {}
+}
 let lastLearn = 0;
 async function learn(a, ask, answer) {
   lastLearn = Date.now();
@@ -117,6 +138,7 @@ http.createServer(async (req, res) => {
   const body = Buffer.concat(chunks), tried = new Set();
   let j; try { j = JSON.parse(body); } catch {}
   const agent = j?.tools?.length && /^\/v1\/messages(\?|$)/.test(req.url);
+  if (agent && mem.on && mem.notes.length && prev && isNewPrompt(j) && CORR.test(askOf(j))) await Promise.race([revise(j), new Promise(r => setTimeout(r, 4000))]);
   const payload = (agent && mem.on && withMemory(j)) || body;
   const track = agent && mem.on && j.stream, learnable = track && Date.now() - lastLearn > 120000;
   for (;;) {
@@ -159,7 +181,8 @@ http.createServer(async (req, res) => {
     up.on('end', () => {
       a.inTok += info.in; a.outTok += info.out; a.cacheTok += info.cache; save();
       if (track && done) {
-        if (learnable && said.length > 40 && Date.now() - lastLearn > 120000) learn(a, askOf(j), said);
+        prev = { ask: askOf(j), said: said.slice(0, 1500) };
+        if (learnable && said.length > 40 && Date.now() - lastLearn > 120000) learn(a, prev.ask, said);
       }
     });
     return up.pipe(res);
