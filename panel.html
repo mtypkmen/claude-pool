@@ -126,6 +126,7 @@ h2{font-size:clamp(52px,9vw,150px);line-height:.92;letter-spacing:-.05em;font-we
 .memsec{position:relative;z-index:3;background:var(--ink);padding:16vh 5vw 2vh}
 .memsub{color:var(--mu);font-size:18px;max-width:640px;margin:3vh 0 0}
 .memctl{display:flex;gap:22px;flex-wrap:wrap;margin:4vh 0 2vh}
+#knowinfo{margin-top:2vh}
 #notes{display:flex;flex-direction:column;transition:opacity .4s}
 .memsec.off #notes{opacity:.4}
 .note{display:grid;grid-template-columns:1fr auto auto;gap:18px;align-items:center;padding:18px 0;border-top:1px solid #ffffff1c;font-size:16px;color:#e4e6f7}
@@ -180,7 +181,8 @@ footer{position:relative;z-index:3;background:var(--ink);padding:6vh 0 5vh;overf
   <section class="memsec">
     <h2 data-split="1">Shared memory</h2>
     <p class="memsub">Every account reads these notes on each request. A short lesson is added after each finished task, and a note is fixed when you correct the result in your next message.</p>
-    <div class="memctl"><button class="btn stop" id="memtoggle"><span>Pause memory</span></button></div>
+    <p class="memsub" id="knowinfo"></p>
+    <div class="memctl"><button class="btn stop" id="memtoggle"><span>Pause memory</span></button><button class="btn" id="rescan"><span>Re-scan files</span></button></div>
     <div id="notes"></div>
     <p id="nonotes">No notes yet. Lessons appear after the first finished task.</p>
   </section>

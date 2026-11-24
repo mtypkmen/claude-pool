@@ -46,11 +46,23 @@ const api = async (a, payload) => fetch(UP + '/v1/messages', { method: 'POST', b
 const MEM = __dirname + '/memory.json';
 let mem = { on: true, notes: [] }; try { mem = { ...mem, ...JSON.parse(fs.readFileSync(MEM)) }; } catch {}
 const saveMem = () => fs.writeFile(MEM, JSON.stringify(mem, null, 1), () => {});
-const withMemory = j => {
-  const n = mem.notes.length ? 'Notes:\n' + mem.notes.slice(-30).map(x => '- ' + x.text).join('\n') : '';
-  if (!n) return null;
+const KN = __dirname + '/knowledge.json';
+let know = null;
+const loadKnow = () => { try { know = JSON.parse(fs.readFileSync(KN)); } catch { know = null; } };
+if (!fs.existsSync(KN)) try { require('./import.js').write(KN); } catch (e) { console.log('knowledge import skipped:', e.message); }
+loadKnow();
+const probe = t => { const l = t.split('\n').find(x => x.trim().length > 25 && !/["\\]/.test(x)); return l ? l.trim().slice(0, 60) : null; };
+const knowText = raw => {
+  if (!know) return '';
+  const keep = know.chunks.filter(c => { const p = probe(c.text); return !(p && raw.includes(p)); });
+  if (!keep.length && !know.index) return '';
+  return "Background about the user and their system, imported from their own files. These are hints and may be outdated; the user's latest message and the real files win.\n\n" + keep.map(c => `### ${c.label}\n${c.text}`).join('\n\n') + (know.index ? '\n\n' + know.index : '');
+};
+const withMemory = (j, raw) => {
+  const k = knowText(raw), n = mem.notes.length ? 'Notes:\n' + mem.notes.slice(-30).map(x => '- ' + x.text).join('\n') : '';
+  if (!k && !n) return null;
   const sys = typeof j.system === 'string' ? [{ type: 'text', text: j.system }] : [...(j.system || [])];
-  sys.push({ type: 'text', text: [rules().use || 'Shared notes from earlier work. Treat them as hints, not facts.', n].filter(Boolean).join('\n\n') });
+  sys.push({ type: 'text', text: [rules().use || 'Shared notes from earlier work. Treat them as hints, not facts.', k, n].filter(Boolean).join('\n\n') });
   return Buffer.from(JSON.stringify({ ...j, system: sys }));
 };
 const askOf = j => {
@@ -128,6 +140,8 @@ http.createServer(async (req, res) => {
   if (st) return res.writeHead(200, { 'content-type': st[1].endsWith('.png') ? 'image/png' : 'text/javascript', 'cache-control': 'no-cache' }).end(fs.readFileSync(__dirname + '/' + st[1].replace(/^v\//, 'vendor/')));
   if (req.url === '/_s') return json(res, accts.map(({ creds, ...x }) => x));
   if (req.url === '/_l') return json(res, log);
+  if (req.url === '/_k') return json(res, know ? { built: know.built, stats: know.stats } : {});
+  if (req.url === '/_k/refresh') { try { require('./import.js').write(KN); } catch {} loadKnow(); return res.end('ok'); }
   if (req.url === '/_m') return json(res, mem);
   if (req.url === '/_m/toggle') { mem.on = !mem.on; saveMem(); return res.end('ok'); }
   if (req.url.startsWith('/_m/del/')) { mem.notes = mem.notes.filter(n => String(n.t) !== req.url.slice(8)); saveMem(); return res.end('ok'); }
@@ -139,7 +153,7 @@ http.createServer(async (req, res) => {
   let j; try { j = JSON.parse(body); } catch {}
   const agent = j?.tools?.length && /^\/v1\/messages(\?|$)/.test(req.url);
   if (agent && mem.on && mem.notes.length && prev && isNewPrompt(j) && CORR.test(askOf(j))) await Promise.race([revise(j), new Promise(r => setTimeout(r, 4000))]);
-  const payload = (agent && mem.on && withMemory(j)) || body;
+  const payload = (agent && mem.on && withMemory(j, body.toString())) || body;
   const track = agent && mem.on && j.stream, learnable = track && Date.now() - lastLearn > 120000;
   for (;;) {
     const a = pick(tried);

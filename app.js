@@ -210,15 +210,23 @@ function memory(m) {
   document.querySelector('.memsec').classList.toggle('off', !m.on);
 }
 $('memtoggle').onclick = () => fetch('/_m/toggle', { method: 'POST' }).then(poll);
+function know(k) {
+  $('knowinfo').textContent = k.stats
+    ? `Imported from your files: ${k.stats.files} documents in context, ${k.stats.indexed} more indexed. Last scan ${new Date(k.built).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
+    : 'No files imported yet. Add folders to import.json and re-scan.';
+}
+$('rescan').onclick = () => fetch('/_k/refresh', { method: 'POST' }).then(poll);
+
 async function poll() {
   try {
     const [s, l] = DEMO ? fake() : await Promise.all([fetch('/_s').then(r => r.json()), fetch('/_l').then(r => r.json())]);
     const m = DEMO ? fakeMem() : await fetch('/_m').then(r => r.json());
+    const kn = DEMO ? { built: new Date(T0).toISOString(), stats: { files: 10, indexed: 240 } } : await fetch('/_k').then(r => r.json());
     s.forEach((x, i) => update(accs.get(x.name) || build(x, i), x));
     const active = s.filter(x => !x.off && x.until < Date.now()).length;
     $('live').textContent = `${active} active`;
     feed(l);
-    memory(m);
+    memory(m); know(kn);
     $('toast').hidden = true;
   } catch (e) { console.warn(e); $('toast').hidden = false; }
   first = false;

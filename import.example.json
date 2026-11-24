@@ -1,0 +1,4 @@
+{
+  "roots": ["~/Documents/notes", "~/projects/my-project"],
+  "coreCap": 16000
+}
