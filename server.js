@@ -43,6 +43,44 @@ const CC = "You are Claude Code, Anthropic's official CLI for Claude.";
 const api = async (a, payload) => fetch(UP + '/v1/messages', { method: 'POST', body: JSON.stringify(payload),
   headers: { authorization: 'Bearer ' + await token(a), 'content-type': 'application/json', 'anthropic-version': '2023-06-01', 'anthropic-beta': 'oauth-2025-04-20' } });
 
+const MEM = __dirname + '/memory.json';
+let mem = { on: true, notes: [] }; try { mem = { ...mem, ...JSON.parse(fs.readFileSync(MEM)) }; } catch {}
+const saveMem = () => fs.writeFile(MEM, JSON.stringify(mem, null, 1), () => {});
+const withMemory = j => {
+  const n = mem.notes.length ? 'Notes:\n' + mem.notes.slice(-30).map(x => '- ' + x.text).join('\n') : '';
+  if (!n) return null;
+  const sys = typeof j.system === 'string' ? [{ type: 'text', text: j.system }] : [...(j.system || [])];
+  sys.push({ type: 'text', text: [rules().use || 'Shared notes from earlier work. Treat them as hints, not facts.', n].filter(Boolean).join('\n\n') });
+  return Buffer.from(JSON.stringify({ ...j, system: sys }));
+};
+const askOf = j => {
+  for (const m of [...(j?.messages || [])].reverse()) {
+    if (m.role !== 'user') continue;
+    const bs = typeof m.content === 'string' ? [{ text: m.content }] : (m.content || []).filter(b => b.type === 'text' && b.text.trim());
+    if (bs.length && bs.at(-1).text.trim()) return bs.at(-1).text;
+  }
+  return '';
+};
+
+const AGENT = __dirname + '/agent.md';
+const rules = () => {
+  let t = ''; try { t = fs.readFileSync(AGENT, 'utf8'); } catch {}
+  const [use, ...rest] = t.split(/^## /m), sec = Object.fromEntries(rest.map(p => [p.split(/[\s(]/)[0].toLowerCase(), '## ' + p.trim()]));
+  return { use: use.replace(/^# .*\n/, '').trim(), write: sec.writing || '', fix: sec.fixing || '' };
+};
+
+let lastLearn = 0;
+async function learn(a, ask, answer) {
+  lastLearn = Date.now();
+  try {
+    const r = await api(a, { model: WARM_MODEL, max_tokens: 120, system: [{ type: 'text', text: CC }], messages: [{ role: 'user', content:
+      `${rules().use}\n\n${rules().write}\n\nA coding assistant just finished a task.\nUser asked: ${ask.slice(0, 600)}\nAssistant's final reply: ${answer.slice(0, 1500)}\n\nWrite ONE short lesson following the rules above. If nothing is worth remembering, reply exactly NONE.` }] });
+    const t = ((await r.json()).content?.[0]?.text || '').trim();
+    if (!t || /^none\b/i.test(t) || t.length > 300 || mem.notes.some(n => n.text === t)) return;
+    mem.notes.push({ t: Date.now(), acct: a.name, text: t }); mem.notes = mem.notes.slice(-100); saveMem();
+  } catch {}
+}
+
 const WARM_MODEL = 'claude-haiku-5-5';
 let warmed = false;
 async function warm() {
@@ -69,13 +107,18 @@ http.createServer(async (req, res) => {
   if (st) return res.writeHead(200, { 'content-type': st[1].endsWith('.png') ? 'image/png' : 'text/javascript', 'cache-control': 'no-cache' }).end(fs.readFileSync(__dirname + '/' + st[1].replace(/^v\//, 'vendor/')));
   if (req.url === '/_s') return json(res, accts.map(({ creds, ...x }) => x));
   if (req.url === '/_l') return json(res, log);
+  if (req.url === '/_m') return json(res, mem);
+  if (req.url === '/_m/toggle') { mem.on = !mem.on; saveMem(); return res.end('ok'); }
+  if (req.url.startsWith('/_m/del/')) { mem.notes = mem.notes.filter(n => String(n.t) !== req.url.slice(8)); saveMem(); return res.end('ok'); }
   if (req.url.startsWith('/_t/')) { const a = accts.find(x => x.name === decodeURIComponent(req.url.slice(4))); if (a) a.off = !a.off; return res.end('ok'); }
 
   if (!warmed && req.method === 'POST' && req.url.startsWith('/v1/messages')) { warmed = true; warm(); }
   const chunks = []; for await (const c of req) chunks.push(c);
   const body = Buffer.concat(chunks), tried = new Set();
   let j; try { j = JSON.parse(body); } catch {}
-  const payload = body;
+  const agent = j?.tools?.length && /^\/v1\/messages(\?|$)/.test(req.url);
+  const payload = (agent && mem.on && withMemory(j)) || body;
+  const track = agent && mem.on && j.stream, learnable = track && Date.now() - lastLearn > 120000;
   for (;;) {
     const a = pick(tried);
     if (!a) return res.writeHead(429, { 'content-type': 'application/json' }).end('{"error":"all accounts are rate-limited or disabled"}');
@@ -101,12 +144,24 @@ http.createServer(async (req, res) => {
     res.writeHead(r.status, out);
     if (!r.body) return res.end();
     const up = Readable.fromWeb(r.body);
+    let sse = '', said = '', done = false;
     up.on('data', c => {
       const s = c.toString();
       const i = grab(s, /"input_tokens":(\d+)/g), o = grab(s, /"output_tokens":(\d+)/g), cr = grab(s, /"cache_read_input_tokens":(\d+)/g);
       if (i !== undefined) info.in = i; if (o !== undefined) info.out = o; if (cr !== undefined) info.cache = cr;
+      if (!track) return;
+      sse += s; const ls = sse.split('\n'); sse = ls.pop();
+      for (const l of ls) {
+        if (!l.startsWith('data:') || !(l.includes('text_delta') || l.includes('end_turn'))) continue;
+        try { const d = JSON.parse(l.slice(5)); if (d.delta?.type === 'text_delta') said += d.delta.text; if (d.delta?.stop_reason === 'end_turn') done = true; } catch {}
+      }
     });
-    up.on('end', () => { a.inTok += info.in; a.outTok += info.out; a.cacheTok += info.cache; save(); });
+    up.on('end', () => {
+      a.inTok += info.in; a.outTok += info.out; a.cacheTok += info.cache; save();
+      if (track && done) {
+        if (learnable && said.length > 40 && Date.now() - lastLearn > 120000) learn(a, askOf(j), said);
+      }
+    });
     return up.pipe(res);
   }
 }).listen(PORT, '127.0.0.1', () => console.log('Panel: http://127.0.0.1:' + PORT));

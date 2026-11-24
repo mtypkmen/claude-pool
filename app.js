@@ -188,13 +188,37 @@ function feed(l) {
   if (l.length !== feedCount) { feedCount = l.length; clearTimeout(feed.t); feed.t = setTimeout(() => ScrollTrigger.refresh(), 500); }
 }
 
+const fakeMem = () => ({ on: true, notes: [
+  { t: T0 - 5 * 3600e3, acct: 'Account 1', text: 'Restart the proxy after editing server.js, it only reads the file at startup.' },
+  { t: T0 - 2 * 3600e3, acct: 'Account 2', text: 'Compile with make; the project has no npm build script.', fixed: true },
+  { t: T0 - 20 * 60e3, acct: 'Account 1', text: 'Run node --check on app.js before reloading the panel.' }] });
+
+const noteEls = new Map();
+function memory(m) {
+  const keys = new Set(m.notes.map(n => n.t));
+  for (const [k, e] of noteEls) if (!keys.has(k)) { e.remove(); noteEls.delete(k); }
+  for (const n of m.notes) {
+    if (noteEls.has(n.t)) continue;
+    const e = el('div', 'note'), d = el('button', '', '×');
+    d.setAttribute('aria-label', 'Delete note'); d.onclick = () => fetch('/_m/del/' + n.t, { method: 'POST' }).then(poll);
+    e.append(el('span', '', n.text), el('small', '', `${n.acct} · ${new Date(n.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${n.fixed ? ' · corrected' : ''}`), d);
+    noteEls.set(n.t, e); $('notes').prepend(e);
+    if (!first) gsap.from(e, { y: -20, opacity: 0, duration: .7, ease: 'expo.out' });
+  }
+  $('nonotes').hidden = m.notes.length > 0;
+  const b = $('memtoggle'); b.className = 'btn ' + (m.on ? 'stop' : 'go'); b.firstChild.textContent = m.on ? 'Pause memory' : 'Resume memory';
+  document.querySelector('.memsec').classList.toggle('off', !m.on);
+}
+$('memtoggle').onclick = () => fetch('/_m/toggle', { method: 'POST' }).then(poll);
 async function poll() {
   try {
     const [s, l] = DEMO ? fake() : await Promise.all([fetch('/_s').then(r => r.json()), fetch('/_l').then(r => r.json())]);
+    const m = DEMO ? fakeMem() : await fetch('/_m').then(r => r.json());
     s.forEach((x, i) => update(accs.get(x.name) || build(x, i), x));
     const active = s.filter(x => !x.off && x.until < Date.now()).length;
     $('live').textContent = `${active} active`;
     feed(l);
+    memory(m);
     $('toast').hidden = true;
   } catch (e) { console.warn(e); $('toast').hidden = false; }
   first = false;
