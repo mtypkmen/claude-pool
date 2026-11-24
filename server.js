@@ -39,6 +39,28 @@ function pick(tried) {
   return cur && ok.includes(cur) && used(cur) - used(ok[0]) < 0.03 ? cur : ok[0];
 }
 
+const CC = "You are Claude Code, Anthropic's official CLI for Claude.";
+const api = async (a, payload) => fetch(UP + '/v1/messages', { method: 'POST', body: JSON.stringify(payload),
+  headers: { authorization: 'Bearer ' + await token(a), 'content-type': 'application/json', 'anthropic-version': '2023-06-01', 'anthropic-beta': 'oauth-2025-04-20' } });
+
+const WARM_MODEL = 'claude-haiku-5-5';
+let warmed = false;
+async function warm() {
+  await Promise.all(accts.filter(a => !a.off).map(async a => {
+    const info = { t: Date.now(), acct: a.name, path: '/v1/messages', model: WARM_MODEL, prompt: 'hi (limit check)', status: '...', in: 0, out: 0, cache: 0 };
+    log.unshift(info); if (log.length > 100) log.pop();
+    try {
+      const r = await api(a, { model: WARM_MODEL, max_tokens: 1, system: [{ type: 'text', text: CC }], messages: [{ role: 'user', content: 'hi' }] });
+      const j = await r.json().catch(() => ({})), u = j.usage || {};
+      a.reqs++; a.status = info.status = r.status;
+      for (const [k, v] of r.headers) if (k.startsWith('anthropic-ratelimit')) a.rl[k.slice(20)] = v;
+      info.in = u.input_tokens || 0; info.out = u.output_tokens || 0; info.cache = u.cache_read_input_tokens || 0;
+      a.inTok += info.in; a.outTok += info.out; a.cacheTok += info.cache; save();
+      if (r.status >= 400) info.err = JSON.stringify(j).slice(0, 400);
+    } catch (e) { a.status = info.status = e.message; }
+  }));
+}
+
 const json = (res, o) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(o));
 
 http.createServer(async (req, res) => {
@@ -49,6 +71,7 @@ http.createServer(async (req, res) => {
   if (req.url === '/_l') return json(res, log);
   if (req.url.startsWith('/_t/')) { const a = accts.find(x => x.name === decodeURIComponent(req.url.slice(4))); if (a) a.off = !a.off; return res.end('ok'); }
 
+  if (!warmed && req.method === 'POST' && req.url.startsWith('/v1/messages')) { warmed = true; warm(); }
   const chunks = []; for await (const c of req) chunks.push(c);
   const body = Buffer.concat(chunks), tried = new Set();
   let j; try { j = JSON.parse(body); } catch {}
