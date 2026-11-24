@@ -1,0 +1,10 @@
+# Personal and generated files: never commit these
+accounts.json
+import.json
+stats.json
+memory.json
+knowledge.json
+vendor/
+node_modules/
+*.log
+.env

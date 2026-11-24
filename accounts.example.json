@@ -1,0 +1,4 @@
+[
+  { "name": "Account 1", "creds": "~/.claude-pool/account1/.credentials.json" },
+  { "name": "Account 2", "creds": "~/.claude-pool/account2/.credentials.json" }
+]
