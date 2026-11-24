@@ -32,7 +32,12 @@ const grab = (s, re) => { let m, v; while ((m = re.exec(s))) v = +m[1]; return v
 
 const page = () => fs.readFileSync(__dirname + '/panel.html');
 
-const pick = tried => accts.filter(x => !x.off && x.until < Date.now() && !tried.has(x)).sort((p, q) => p.last - q.last)[0];
+let cur = null;
+const used = x => Math.max(...['5h', '7d'].map(k => +x.rl['unified-' + k + '-reset'] * 1000 < Date.now() ? 0 : +x.rl['unified-' + k + '-utilization'] || 0));
+function pick(tried) {
+  const ok = accts.filter(x => !x.off && x.until < Date.now() && !tried.has(x)).sort((p, q) => used(p) - used(q) || p.last - q.last);
+  return cur && ok.includes(cur) && used(cur) - used(ok[0]) < 0.03 ? cur : ok[0];
+}
 
 const json = (res, o) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(o));
 
@@ -51,7 +56,7 @@ http.createServer(async (req, res) => {
   for (;;) {
     const a = pick(tried);
     if (!a) return res.writeHead(429, { 'content-type': 'application/json' }).end('{"error":"all accounts are rate-limited or disabled"}');
-    tried.add(a); a.last = Date.now(); a.reqs++;
+    tried.add(a); a.last = Date.now(); a.reqs++; cur = a;
     const info = { t: Date.now(), acct: a.name, path: req.url, model: j?.model || '', prompt: lastPrompt(j), status: '...', in: 0, out: 0, cache: 0 };
     log.unshift(info); if (log.length > 100) log.pop();
     let r;
