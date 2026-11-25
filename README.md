@@ -19,7 +19,7 @@ Nothing leaves your machine except the requests Claude Code was going to send an
 - **Step rotation.** Anthropic's prompt cache is per account, so switching on every request would waste it. The proxy stays on one account until it has used 10 more points of its session (5 h) limit, then moves to the one with the most session limit left.
 - **Account management.** Add an account with **+ Acc** (opens the browser sign-in), or use **⋯** on a card to refresh its login or remove it.
 - **Real failover only.** A response counts as an account limit only if it carries `retry-after` or a non-`allowed` limit status. Other 429s are passed through untouched.
-- **Limit check on start.** The first real request triggers a tiny `hi` to every account so the panel shows each account's limits immediately.
+- **Limit check on start.** The first real request triggers a tiny `hi` to every account, 30 seconds apart (`GAP`, in milliseconds), so the panel shows each account's limits without sending them all at once. Background token renewal is spaced the same way.
 - **Web panel.** Remaining session (5 h) and weekly limit per account, request log, total tokens (kept across restarts), a one-click disable switch per account.
 - **Shared memory.** After a finished task a short lesson is stored and shown to every account. If you correct the result in your next message, the wrong note is fixed. Rules live in `agent.md`.
 - **Imported knowledge.** Your own `CLAUDE.md` files, Claude memory, agent definitions and notes folders are packed once and added to requests, so the pool knows you even when started from another folder. See [Imported knowledge](#imported-knowledge).

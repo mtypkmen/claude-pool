@@ -1,6 +1,8 @@
 const http = require('http'), fs = require('fs'), { Readable } = require('stream');
 const PORT = process.env.PORT || 8787, UP = process.env.UP || 'https://api.anthropic.com';
-const CLIENT_ID = '9d1c250a-e61b-47e8-bb04-3be3bc1f2a99';
+const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+// gap between accounts when something is sent to all of them, so they never fire at once
+const GAP = +(process.env.GAP ?? 30000), spaced = (list, fn) => list.forEach((a, i) => setTimeout(fn, i * GAP, a).unref());
 const STATS = __dirname + '/stats.json';
 let saved = {}; try { saved = JSON.parse(fs.readFileSync(STATS)); } catch {}
 const accts = JSON.parse(fs.readFileSync(__dirname + '/accounts.json'))
@@ -55,11 +57,11 @@ function token(a, margin = 60000) {
   return a.rf ||= refresh(a, margin).finally(() => { a.rf = null; });
 }
 // Keep tokens fresh while idle: renew anything expiring within 30 min, checked every 5 min.
-setInterval(() => accts.forEach(a => token(a, 30 * 60000).catch(e => { a.status = e.message; })), 5 * 60000).unref();
+setInterval(() => spaced(accts, a => token(a, 30 * 60000).catch(e => { a.status = e.message; })), 5 * 60000).unref();
 async function refresh(a, margin) {
   const f = JSON.parse(fs.readFileSync(a.creds)), o = f.claudeAiOauth;
   if (o.expiresAt - margin > Date.now()) return o.accessToken;
-  const r = await fetch('https://console.anthropic.com/v1/oauth/token', {
+  const r = await fetch('https://platform.claude.com/v1/oauth/token', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: o.refreshToken, client_id: CLIENT_ID }) });
   if (!r.ok) throw new Error('refresh ' + r.status + ' ' + (await r.text()).slice(0, 120));
@@ -172,8 +174,8 @@ async function learn(a, ask, answer) {
 
 const WARM_MODEL = 'claude-haiku-5-5';
 let warmed = false;
-async function warm() {
-  await Promise.all(accts.filter(a => !a.off).map(async a => {
+function warm() {
+  spaced(accts.filter(a => !a.off), async a => {
     const info = { t: Date.now(), acct: a.name, path: '/v1/messages', model: WARM_MODEL, prompt: 'hi (limit check)', status: '...', in: 0, out: 0, cache: 0 };
     log.unshift(info); if (log.length > 100) log.pop();
     try {
@@ -185,7 +187,7 @@ async function warm() {
       a.inTok += info.in; a.outTok += info.out; a.cacheTok += info.cache; save();
       if (r.status >= 400) info.err = JSON.stringify(j).slice(0, 400);
     } catch (e) { a.status = info.status = e.message; }
-  }));
+  });
 }
 
 const json = (res, o) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(o));
@@ -234,7 +236,7 @@ http.createServer(async (req, res) => {
     let r;
     try {
       const h = { ...req.headers };
-      for (const k of ['host', 'x-api-key', 'content-length', 'accept-encoding']) delete h[k];
+      for (const k of ['host', 'x-api-key', 'content-length', 'accept-encoding', 'expect']) delete h[k];
       h.authorization = 'Bearer ' + await token(a);
       h['anthropic-beta'] = [...new Set([...(h['anthropic-beta'] || '').split(','), 'oauth-2025-04-20'].filter(Boolean))].join(',');
       r = await fetch(UP + req.url, { method: req.method, headers: h, body: ['GET', 'HEAD'].includes(req.method) ? undefined : payload });

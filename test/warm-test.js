@@ -8,12 +8,12 @@ fs.writeFileSync(path.join(dir, 'accounts.json'), JSON.stringify([{ name: 'A', c
 const up = http.createServer((req, res) => {
   let b = ''; req.on('data', c => b += c).on('end', () => {
     const body = JSON.parse(b || '{}'), tok = req.headers.authorization;
-    seen.push({ tok, msg: body.messages?.[0]?.content, sys: body.system?.[0]?.text, ver: req.headers['anthropic-version'], beta: req.headers['anthropic-beta'] });
+    seen.push({ at: Date.now(), tok, msg: body.messages?.[0]?.content, sys: body.system?.[0]?.text, ver: req.headers['anthropic-version'], beta: req.headers['anthropic-beta'] });
     res.writeHead(200, { 'content-type': 'application/json', 'anthropic-ratelimit-unified-5h-utilization': tok.endsWith('a') ? '0.40' : '0.10', 'anthropic-ratelimit-unified-7d-utilization': '0.05', 'anthropic-ratelimit-unified-5h-reset': '9999999999' });
     res.end(JSON.stringify({ usage: { input_tokens: 8, output_tokens: 1, cache_read_input_tokens: 0 } }));
   });
 }).listen(9411, async () => {
-  const p = spawn(process.execPath, [path.join(dir, 'server.js')], { env: { ...process.env, PORT: '9412', UP: 'http://127.0.0.1:9411' }, stdio: 'ignore' });
+  const p = spawn(process.execPath, [path.join(dir, 'server.js')], { env: { ...process.env, PORT: '9412', GAP: '300', UP: 'http://127.0.0.1:9411' }, stdio: 'ignore' });
   const wait = ms => new Promise(r => setTimeout(r, ms));
   try {
     await wait(800);
@@ -25,6 +25,7 @@ const up = http.createServer((req, res) => {
     const hi = seen.filter(s => s.msg === 'hi'), real = seen.filter(s => s.msg === 'real question');
     assert.equal(hi.length, 2, 'hi must be sent to both accounts');
     assert.deepEqual(hi.map(s => s.tok).sort(), ['Bearer fake-a', 'Bearer fake-b']);
+    assert.ok(Math.abs(hi[1].at - hi[0].at) >= 150, 'hi requests must be spaced by GAP, got ' + (hi[1].at - hi[0].at));
     assert.equal(real.length, 1);
     assert.ok(hi.every(s => s.sys.includes('Claude Code') && s.ver && s.beta.includes('oauth')));
     const st = await (await fetch('http://127.0.0.1:9412/_s')).json();

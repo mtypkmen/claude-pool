@@ -12,7 +12,7 @@ const up = http.createServer((q, r) => {
   seen.add(q.headers.authorization);
   q.resume().on('end', () => { r.writeHead(200, { 'content-type': 'application/json', 'anthropic-ratelimit-unified-5h-utilization': '0.1', 'anthropic-ratelimit-unified-5h-reset': '9999999999' }); r.end('{"usage":{}}'); });
 }).listen(9451, async () => {
-  const p = spawn(process.execPath, [path.join(dir, 'server.js')], { env: { ...process.env, PORT: '9452', UP: 'http://127.0.0.1:9451' }, stdio: 'ignore' });
+  const p = spawn(process.execPath, [path.join(dir, 'server.js')], { env: { ...process.env, PORT: '9452', GAP: '20', UP: 'http://127.0.0.1:9451' }, stdio: 'ignore' });
   const w = ms => new Promise(r => setTimeout(r, ms));
   try {
     await w(900);
