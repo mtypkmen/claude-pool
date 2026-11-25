@@ -10,13 +10,20 @@ let saveT;
 const save = () => { clearTimeout(saveT); saveT = setTimeout(() => fs.writeFile(STATS, JSON.stringify(Object.fromEntries(accts.map(a => [a.name, { reqs: a.reqs, limited: a.limited, inTok: a.inTok, outTok: a.outTok, cacheTok: a.cacheTok }]))), () => {}), 2000); };
 const log = [];
 
-async function token(a) {
+// One refresh at a time per account: refresh tokens rotate, so a parallel second refresh
+// reuses a dead token (400) and kills the account.
+function token(a, margin = 60000) {
+  return a.rf ||= refresh(a, margin).finally(() => { a.rf = null; });
+}
+// Keep tokens fresh while idle: renew anything expiring within 30 min, checked every 5 min.
+setInterval(() => accts.forEach(a => token(a, 30 * 60000).catch(e => { a.status = e.message; })), 5 * 60000).unref();
+async function refresh(a, margin) {
   const f = JSON.parse(fs.readFileSync(a.creds)), o = f.claudeAiOauth;
-  if (o.expiresAt - 60000 > Date.now()) return o.accessToken;
+  if (o.expiresAt - margin > Date.now()) return o.accessToken;
   const r = await fetch('https://console.anthropic.com/v1/oauth/token', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: o.refreshToken, client_id: CLIENT_ID }) });
-  if (!r.ok) throw new Error('refresh ' + r.status);
+  if (!r.ok) throw new Error('refresh ' + r.status + ' ' + (await r.text()).slice(0, 120));
   const j = await r.json();
   Object.assign(o, { accessToken: j.access_token, refreshToken: j.refresh_token || o.refreshToken, expiresAt: Date.now() + j.expires_in * 1000 });
   fs.writeFileSync(a.creds, JSON.stringify(f));
