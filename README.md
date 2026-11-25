@@ -146,6 +146,7 @@ Environment: `PORT` (default 8787) and `UP` (upstream URL, for tests).
 ## Security
 
 - The proxy listens on `127.0.0.1` only. The panel has no login.
+- Requests from other websites open in your browser are refused (403): the `Host` must be `127.0.0.1` or `localhost`, a foreign `Origin` is rejected, and so are cross-site requests to anything but the panel page.
 - Tokens are read from your credentials files when needed. They are never logged, never sent to the panel (the account list sent to the page has the credential path removed) and only go to Anthropic. When an access token has expired the proxy refreshes it and writes the new one back to the same file.
 - `accounts.json`, `stats.json`, `memory.json`, `knowledge.json` and `import.json` are in `.gitignore`.
 

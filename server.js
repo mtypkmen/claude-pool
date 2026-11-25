@@ -190,7 +190,17 @@ async function warm() {
 
 const json = (res, o) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(o));
 
+// Other websites open in the user's browser can reach 127.0.0.1: refuse foreign Host (DNS rebinding), Origin and cross-site requests.
+function foreign(req) {
+  const hosts = ['127.0.0.1:' + PORT, 'localhost:' + PORT], o = req.headers.origin, site = req.headers['sec-fetch-site'];
+  if (!hosts.includes(req.headers.host)) return true;
+  if (o && !hosts.some(h => o === 'http://' + h)) return true;
+  // plain GETs such as <img src> send no Origin; following a link to the panel itself stays allowed
+  return (site === 'cross-site' || site === 'same-site') && req.url.split('?')[0] !== '/';
+}
+
 http.createServer(async (req, res) => {
+  if (foreign(req)) return res.writeHead(403).end('forbidden');
   if (req.url.split('?')[0] === '/') return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(page());
   const st = req.url.match(/^\/(app\.js|v\/[\w-]+(?:\.[\w-]+)*\.js|assets\/[\w-]+\.png)$/);
   if (st) return res.writeHead(200, { 'content-type': st[1].endsWith('.png') ? 'image/png' : 'text/javascript', 'cache-control': 'no-cache' }).end(fs.readFileSync(__dirname + '/' + st[1].replace(/^v\//, 'vendor/')));

@@ -8,6 +8,6 @@
     "setup": "node setup.js",
     "start": "node server.js",
     "import": "node import.js",
-    "test": "node test/warm-test.js server.js && node test/memory-test.js server.js && node test/correction-test.js server.js agent.md && node test/knowledge-test.js . && node test/ten-accounts-test.js . && node test/rotation-test.js server.js"
+    "test": "node test/warm-test.js server.js && node test/memory-test.js server.js && node test/correction-test.js server.js agent.md && node test/knowledge-test.js . && node test/ten-accounts-test.js . && node test/rotation-test.js server.js && node test/origin-test.js server.js"
   }
 }
