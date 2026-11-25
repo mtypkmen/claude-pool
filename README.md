@@ -16,7 +16,8 @@ Nothing leaves your machine except the requests Claude Code was going to send an
 ## Features
 
 - **Up to 10 accounts, one session.** Requests are spread by remaining quota instead of exhausting one account first. Each account gets its own color in the panel.
-- **Sticky balancing.** Anthropic's prompt cache is per account, so switching on every request would waste it. The proxy stays on the current account until another one is more than 3 points emptier.
+- **Step rotation.** Anthropic's prompt cache is per account, so switching on every request would waste it. The proxy stays on one account until it has used 10 more points of its session (5 h) limit, then moves to the one with the most session limit left.
+- **Account management.** Add an account with **+ Acc** (opens the browser sign-in), or use **⋯** on a card to refresh its login or remove it.
 - **Real failover only.** A response counts as an account limit only if it carries `retry-after` or a non-`allowed` limit status. Other 429s are passed through untouched.
 - **Limit check on start.** The first real request triggers a tiny `hi` to every account so the panel shows each account's limits immediately.
 - **Web panel.** Remaining session (5 h) and weekly limit per account, request log, total tokens (kept across restarts), a one-click disable switch per account.
@@ -98,8 +99,8 @@ Try the design without any account: open `http://127.0.0.1:8787/?demo`.
 ## How accounts are chosen
 
 1. Accounts that are disabled or cooling down are skipped.
-2. Usage is `max(session, weekly)`. A reset time that has already passed counts as 0.
-3. The proxy keeps the current account until another one is more than 3 points less used.
+2. A limit whose reset time has already passed counts as 0. An account at 98% of its session or weekly limit is used only if no other account is available.
+3. The proxy keeps the current account until its session (5 h) usage has grown by 10 points, then picks the other account with the lowest session usage. Change `STEP` in `server.js` to switch more or less often.
 4. A real limit puts an account on cooldown and the request is retried on another account. A 401 puts it on a 60 s cooldown.
 
 ## Shared memory

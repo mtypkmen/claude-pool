@@ -80,10 +80,19 @@ const grab = (s, re) => { let m, v; while ((m = re.exec(s))) v = +m[1]; return v
 const page = () => fs.readFileSync(__dirname + '/panel.html');
 
 let cur = null;
-const used = x => Math.max(...['5h', '7d'].map(k => +x.rl['unified-' + k + '-reset'] * 1000 < Date.now() ? 0 : +x.rl['unified-' + k + '-utilization'] || 0));
+const util = (x, k) => +x.rl['unified-' + k + '-reset'] * 1000 < Date.now() ? 0 : +x.rl['unified-' + k + '-utilization'] || 0;
+const STEP = 0.10, FULL = 0.98;
+const full = x => util(x, '5h') >= FULL || util(x, '7d') >= FULL;
+// Stay on one account until it burns STEP of its 5h window, then move to the other one with the most 5h left.
 function pick(tried) {
-  const ok = accts.filter(x => !x.off && x.until < Date.now() && !tried.has(x)).sort((p, q) => used(p) - used(q) || p.last - q.last);
-  return cur && ok.includes(cur) && used(cur) - used(ok[0]) < 0.03 ? cur : ok[0];
+  const ok = accts.filter(x => !x.off && x.until < Date.now() && !tried.has(x))
+    .sort((p, q) => full(p) - full(q) || util(p, '5h') - util(q, '5h') || p.last - q.last);
+  if (ok.includes(cur) && !full(cur)) {
+    // base is unknown until a response reports usage; it drops with the value when the window resets
+    if ('unified-5h-utilization' in cur.rl) cur.base = Math.min(cur.base ?? 1, util(cur, '5h'));
+    if (cur.base === undefined || util(cur, '5h') - cur.base < STEP - 1e-9) return cur;
+  }
+  return ok.find(x => x !== cur && !full(x)) || ok[0];
 }
 
 const CC = "You are Claude Code, Anthropic's official CLI for Claude.";
@@ -208,6 +217,7 @@ http.createServer(async (req, res) => {
   for (;;) {
     const a = pick(tried);
     if (!a) return res.writeHead(429, { 'content-type': 'application/json' }).end('{"error":"all accounts are rate-limited or disabled"}');
+    if (a !== cur) a.base = undefined;
     tried.add(a); a.last = Date.now(); a.reqs++; cur = a;
     const info = { t: Date.now(), acct: a.name, path: req.url, model: j?.model || '', prompt: lastPrompt(j), status: '...', in: 0, out: 0, cache: 0 };
     log.unshift(info); if (log.length > 100) log.pop();
