@@ -9,6 +9,45 @@ const accts = JSON.parse(fs.readFileSync(__dirname + '/accounts.json'))
 let saveT;
 const save = () => { clearTimeout(saveT); saveT = setTimeout(() => fs.writeFile(STATS, JSON.stringify(Object.fromEntries(accts.map(a => [a.name, { reqs: a.reqs, limited: a.limited, inTok: a.inTok, outTok: a.outTok, cacheTok: a.cacheTok }]))), () => {}), 2000); };
 const log = [];
+let adding = null;
+function addAccount() {
+  if (adding) return adding.name;
+  const os = require('os'), path = require('path'), { spawn } = require('child_process');
+  let n = accts.length + 1; while (fs.existsSync(path.join(os.homedir(), '.claude-h' + n))) n++;
+  let k = accts.length + 1; while (accts.some(x => x.name === 'Account ' + k)) k++;
+  const dir = path.join(os.homedir(), '.claude-h' + n), name = 'Account ' + k;
+  const creds = dir.split('\\').join('/') + '/.credentials.json';
+  fs.mkdirSync(dir, { recursive: true });
+  spawn('claude', ['auth', 'login'], { env: { ...process.env, CLAUDE_CONFIG_DIR: dir }, shell: true, stdio: 'ignore', windowsHide: true }).on('error', () => {});
+  const t0 = Date.now(), iv = setInterval(() => {
+    if (fs.existsSync(creds) && fs.statSync(creds).size > 2) {
+      clearInterval(iv); adding = null;
+      accts.push({ name, creds, reqs: 0, limited: 0, last: 0, until: 0, off: false, status: '-', rl: {}, inTok: 0, outTok: 0, cacheTok: 0 });
+      const f = __dirname + '/accounts.json';
+      fs.writeFileSync(f, JSON.stringify(JSON.parse(fs.readFileSync(f)).concat({ name, creds }), null, 2));
+    } else if (Date.now() - t0 > 5 * 60e3) { clearInterval(iv); adding = null; }  // gave up waiting for login
+  }, 2000);
+  return adding = { name };
+}
+// Re-login an existing account in its own config dir; done when its credentials file changes.
+function reauth(a) {
+  if (a.reauth) return;
+  const path = require('path'), { spawn } = require('child_process'), m0 = () => fs.statSync(a.creds).mtimeMs;
+  const base = m0(), t0 = Date.now();
+  a.reauth = true;
+  spawn('claude', ['auth', 'login'], { env: { ...process.env, CLAUDE_CONFIG_DIR: path.dirname(a.creds) }, shell: true, stdio: 'ignore', windowsHide: true }).on('error', () => {});
+  const iv = setInterval(() => {
+    if (m0() !== base) { clearInterval(iv); a.reauth = false; a.until = 0; a.status = '-'; }
+    else if (Date.now() - t0 > 5 * 60e3) { clearInterval(iv); a.reauth = false; }
+  }, 2000);
+}
+function removeAccount(a) {
+  accts.splice(accts.indexOf(a), 1);
+  if (cur === a) cur = null;
+  const f = __dirname + '/accounts.json';
+  fs.writeFileSync(f, JSON.stringify(JSON.parse(fs.readFileSync(f)).filter(x => x.name !== a.name), null, 2));
+  save();
+}
 
 // One refresh at a time per account: refresh tokens rotate, so a parallel second refresh
 // reuses a dead token (400) and kills the account.
@@ -146,6 +185,7 @@ http.createServer(async (req, res) => {
   if (req.url.split('?')[0] === '/') return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(page());
   const st = req.url.match(/^\/(app\.js|v\/[\w-]+(?:\.[\w-]+)*\.js|assets\/[\w-]+\.png)$/);
   if (st) return res.writeHead(200, { 'content-type': st[1].endsWith('.png') ? 'image/png' : 'text/javascript', 'cache-control': 'no-cache' }).end(fs.readFileSync(__dirname + '/' + st[1].replace(/^v\//, 'vendor/')));
+  if (req.url === '/_add' && req.method === 'POST') return json(res, { adding: !!addAccount() });
   if (req.url === '/_s') return json(res, accts.map(({ creds, ...x }) => x));
   if (req.url === '/_l') return json(res, log);
   if (req.url === '/_k') return json(res, know ? { built: know.built, stats: know.stats } : {});
@@ -153,6 +193,8 @@ http.createServer(async (req, res) => {
   if (req.url === '/_m') return json(res, mem);
   if (req.url === '/_m/toggle') { mem.on = !mem.on; saveMem(); return res.end('ok'); }
   if (req.url.startsWith('/_m/del/')) { mem.notes = mem.notes.filter(n => String(n.t) !== req.url.slice(8)); saveMem(); return res.end('ok'); }
+  const ac = req.url.match(/^\/_(rm|re)\/(.+)$/);
+  if (ac && req.method === 'POST') { const a = accts.find(x => x.name === decodeURIComponent(ac[2])); if (a) ac[1] === 'rm' ? removeAccount(a) : reauth(a); return res.end('ok'); }
   if (req.url.startsWith('/_t/')) { const a = accts.find(x => x.name === decodeURIComponent(req.url.slice(4))); if (a) a.off = !a.off; return res.end('ok'); }
 
   if (!warmed && req.method === 'POST' && req.url.startsWith('/v1/messages')) { warmed = true; warm(); }

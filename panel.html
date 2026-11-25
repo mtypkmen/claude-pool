@@ -51,6 +51,9 @@ h1,h2,h3{margin:0;font-family:var(--disp)}
 
 .nav{position:fixed;left:0;right:0;top:0;z-index:200;display:flex;justify-content:space-between;align-items:center;padding:26px 5vw;mix-blend-mode:difference;color:#fff;pointer-events:none}
 .logo{font:700 20px var(--disp);letter-spacing:-.02em}
+.navr{display:flex;align-items:center;gap:18px}
+.addacc{pointer-events:auto;cursor:pointer;font:600 13px var(--body);color:#fff;background:none;border:1px solid #fff;border-radius:99px;padding:6px 16px}
+.addacc:disabled{opacity:.6;cursor:wait}
 .live{display:flex;align-items:center;gap:10px;font-size:14px}
 .live::before{content:"";width:8px;height:8px;border-radius:50%;background:#fff;animation:blink 1.8s infinite}
 @keyframes blink{50%{opacity:.2}}
@@ -79,8 +82,9 @@ h1,h2,h3{margin:0;font-family:var(--disp)}
 
 .acc{padding:15vh 5vw 14vh}
 h2{font-size:clamp(52px,9vw,150px);line-height:.92;letter-spacing:-.05em;font-weight:700}
-.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:5vw;margin-top:8vh}
-.col .slot{height:clamp(300px,34vw,470px)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:3vw;margin-top:8vh}
+.col .slot{height:clamp(220px,calc(70vw / var(--n,2)),470px)}
+.big{font-size:clamp(80px,calc(28vw / var(--n,2)),230px)!important}
 .nm{display:flex;justify-content:space-between;align-items:center;margin-top:2vh}
 .nm h3{font:600 21px/1.2 "Unbounded",var(--disp);letter-spacing:-.01em}
 .pill{font-size:13px;padding:5px 16px;border-radius:99px;border:1px solid #ffffff33;color:#8ef0c0}
@@ -89,6 +93,14 @@ h2{font-size:clamp(52px,9vw,150px);line-height:.92;letter-spacing:-.05em;font-we
 .big sup{font-size:.26em;vertical-align:top;margin-left:.08em;letter-spacing:0;color:var(--mu)}
 .cap{margin:14px 0 2px;font-size:18px}
 .rs{margin:0;color:var(--mu);font-size:15px;min-height:24px}
+.acts{display:flex;gap:10px;align-items:center}
+.mgbtn{cursor:pointer;font:600 20px var(--body);color:#fff;background:#ffffff1f;border:1px solid #ffffff55;border-radius:99px;width:44px;height:44px;margin-bottom:7px}
+#mng{border:0;border-radius:20px;padding:28px;background:var(--ink);color:#fff;max-width:380px;font-family:var(--body)}
+#mng::backdrop{background:#0a0b14aa}
+#mng h3{margin:0 0 6px;font-family:var(--disp)}
+.mngb{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.mngb button{cursor:pointer;font:600 14px var(--body);color:#fff;background:#ffffff1f;border:1px solid #ffffff55;border-radius:99px;padding:10px 18px}
+.mngb .mrm{background:#e23a1e;border-color:#e23a1e}.mngb .mre{background:#2a38e6;border-color:#2a38e6}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 26px}
 .chip{padding:5px 14px;border-radius:99px;background:#ffffff0f;color:var(--mu);font-size:13px}
 .chip b{color:#fff;font-weight:600;margin-left:6px;font-variant-numeric:tabular-nums}
@@ -165,7 +177,7 @@ footer{position:relative;z-index:3;background:var(--ink);padding:6vh 0 5vh;overf
   <div class="pre-line"><i></i></div>
 </div>
 
-<header class="nav"><span class="logo">Claude Pool</span><span class="live" id="live">connecting</span></header>
+<header class="nav"><span class="logo">Claude Pool</span><span class="navr"><span class="live" id="live">connecting</span><button class="addacc" id="add">+ Acc</button></span></header>
 
 <main>
   <section class="acc">
@@ -198,6 +210,8 @@ footer{position:relative;z-index:3;background:var(--ink);padding:6vh 0 5vh;overf
   </footer>
 </main>
 
+<dialog id="mng"><h3 id="mngt"></h3><p>What do you want to do with this account?</p>
+  <div class="mngb"><button class="mrm" id="mrm">Remove account</button><button class="mre" id="mre">Refresh auth</button><button id="mcx">Cancel</button></div></dialog>
 <div id="toast" hidden>Can't reach the proxy. Run claude-pool in your terminal.</div>
 
 <script src="/v/gsap.min.js"></script>

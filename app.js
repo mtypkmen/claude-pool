@@ -9,8 +9,8 @@ history.scrollRestoration = 'manual';
 const PAL = [
   { body: '#3d6bff', ring: '#9fb0ff', glow: '#66e8ff', css: ['#3d4bff', '#66e8ff'] },
   { body: '#dd7b59', ring: '#ffb08a', glow: '#ff8a5c', css: ['#ff5a3c', '#ffb36b'] },
-  { body: '#2fcf8a', ring: '#9af0c8', glow: '#46e0a0', css: ['#17b17a', '#7be8b8'] },
   { body: '#a77bff', ring: '#d0b8ff', glow: '#b08cff', css: ['#8a5cff', '#d0b8ff'] },
+  { body: '#2fcf8a', ring: '#9af0c8', glow: '#46e0a0', css: ['#17b17a', '#7be8b8'] },
   { body: '#ff5fa8', ring: '#ffb3d6', glow: '#ff7fbc', css: ['#e83d8e', '#ffb3d6'] },
   { body: '#f2b632', ring: '#ffe08a', glow: '#ffcc55', css: ['#e5a100', '#ffe08a'] },
   { body: '#22c7e8', ring: '#9be9f7', glow: '#4fd8f2', css: ['#0fb0d3', '#9be9f7'] },
@@ -108,12 +108,13 @@ function build(x, i) {
     <div class="nm"><h3></h3><span class="pill"></span></div>
     <div class="big"><span class="n">–</span><sup>%</sup></div>
     <p class="cap">session limit left</p><p class="rs"></p>
-    <div class="chips"></div><button class="btn stop"><span>Disable</span></button>`;
+    <div class="chips"></div><div class="acts"><button class="btn stop"><span>Disable</span></button><button class="mgbtn" aria-label="Manage account" title="Remove / refresh auth">⋯</button></div>`;
   a.mascot = mascot(i); col.querySelector('.slot').append(a.mascot.root);
   col.querySelector('h3').textContent = x.name;
   $('cols').append(col);
   Object.assign(a, { col, n: col.querySelector('.n'), pill: col.querySelector('.pill'), rs: col.querySelector('.rs'), chips: col.querySelector('.chips'), btn: col.querySelector('.btn'), color: p.css[0] });
   a.btn.onclick = () => fetch('/_t/' + encodeURIComponent(x.name), { method: 'POST' }).then(poll);
+  col.querySelector('.mgbtn').onclick = () => { manage = x.name; $('mngt').textContent = x.name; $('mng').showModal(); };
   const row = el('div', 'wrow');
   row.style.setProperty('--c1', p.css[0]); row.style.setProperty('--c2', p.css[1]);
   const who = el('div', 'wl'), nm = el('div', 'wname'); nm.append(el('i'), x.name);
@@ -223,12 +224,22 @@ function know(k) {
 }
 $('rescan').onclick = () => fetch('/_k/refresh', { method: 'POST' }).then(poll);
 
+let manage = '';
+const act = p => () => { $('mng').close(); if (!DEMO) fetch(p + encodeURIComponent(manage), { method: 'POST' }).then(poll); };
+$('mrm').onclick = act('/_rm/'); $('mre').onclick = act('/_re/'); $('mcx').onclick = () => $('mng').close();
+
+let addN = 0;
+$('add').onclick = () => { $('add').disabled = true; $('add').textContent = 'Sign in via browser…'; fetch('/_add', { method: 'POST' }); };
+
 async function poll() {
   try {
     const [s, l] = DEMO ? fake() : await Promise.all([fetch('/_s').then(r => r.json()), fetch('/_l').then(r => r.json())]);
     const m = DEMO ? fakeMem() : await fetch('/_m').then(r => r.json());
     const kn = DEMO ? { built: new Date(T0).toISOString(), stats: { files: 10, indexed: 240 } } : await fetch('/_k').then(r => r.json());
+    for (const [n, a] of accs) if (!s.some(x => x.name === n)) { a.col.remove(); a.row.remove(); accs.delete(n); addN = s.length; }
     s.forEach((x, i) => update(accs.get(x.name) || build(x, i), x));
+    $('cols').style.setProperty('--n', Math.min(s.length, 4)); $('wrows').style.setProperty('--n', s.length);
+    if (s.length > addN) { addN = s.length; $('add').disabled = false; $('add').textContent = '+ Acc'; }
     const active = s.filter(x => !x.off && x.until < Date.now()).length;
     $('live').textContent = `${active} active`;
     feed(l);
